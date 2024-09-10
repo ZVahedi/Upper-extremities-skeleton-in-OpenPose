@@ -1,0 +1,236 @@
+This code is designed to modify the skeleton of the final visualization of OpenPose model, only on the selected landmarks. In the current code our purpose was to only present the upper extremities and change the color to putple.
+
+This approach can be used for both the Body_25 and COCO models. After intalling OpenPose and dependencies you need to take the following stepe:
+
+
+1) BODY_25
+!cd $OPENPOSE_PATH && ./build/examples/openpose/openpose.bin --video ../images/YOUR_VIDEO.mp4 --write_json ../output_jsons2/ --model_pose BODY_25 -hand -face  --write_video ../images/YOUR_VIDEO_OUTPUT_25.mp4 --display 0 --render_pose 1
+
+
+Filtering keypoints - BODY 25
+import os
+import json
+
+input_folder = "/content/output_jsons2"
+output_folder = "/content/filtered_output_jsons/"
+
+# Create the output folder if it doesn't exist
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+# Indices for BODY_25 keypoints excluding knees (10, 13) and ankles (11, 14)
+keypoints_to_keep = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 15, 16, 17, 18
+]
+
+for filename in os.listdir(input_folder):
+    if filename.endswith(".json"):
+        input_filepath = os.path.join(input_folder, filename)
+        output_filepath = os.path.join(output_folder, filename)
+
+        # Read the input JSON file
+        with open(input_filepath, 'r') as f:
+            data = json.load(f)
+
+            for person in data['people']:
+                keypoints = person['pose_keypoints_2d']
+                filtered_keypoints = []
+
+                # Keep only the specified keypoints
+                for i in keypoints_to_keep:
+                    filtered_keypoints.extend(keypoints[i*3:(i+1)*3])
+
+                # Update the person's keypoints with the filtered keypoints
+                person['pose_keypoints_2d'] = filtered_keypoints
+
+        # Write the filtered data to the output JSON file
+        with open(output_filepath, 'w') as f:
+            json.dump(data, f, indent=4)  # Add indentation for readability
+
+print("Keypoints filtering complete. Check the output JSON files in the filtered_output_jsons folder.")
+
+
+
+Adjusting visualization on BODY 25
+
+import cv2
+import os
+import json
+
+# Paths
+input_folder = "/content/filtered_output_jsons4"
+video_path = "/content/images/YOUR_VIDEO.mp4"
+output_video_path = "/content/images/YOUR_VIDEO_OUTPUT_25.mp4"
+
+# Open the original video
+cap = cv2.VideoCapture(video_path)
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter(output_video_path, fourcc, int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+
+# New mapping for BODY_PARTS based on keypoints_to_keep
+BODY_PARTS = {
+    "Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
+    "LShoulder": 5, "LElbow": 6, "LWrist": 7, "MidHip": 8, "RHip": 9, "LHip": 10,
+    "REye": 11, "LEye": 12, "REar": 13, "LEar": 14
+}
+
+POSE_PAIRS = [
+    ["Neck", "RShoulder"], ["Neck", "LShoulder"], ["RShoulder", "RElbow"],
+    ["RElbow", "RWrist"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
+    ["Neck", "MidHip"], ["MidHip", "RHip"], ["MidHip", "LHip"],
+    ["Neck", "Nose"], ["Nose", "REye"], ["REye", "REar"], ["Nose", "LEye"], ["LEye", "LEar"]
+]
+
+# Function to draw keypoints and lines connecting them
+def draw_keypoints_and_lines(frame, keypoints, pairs, color=(255, 0, 0)): # change it to purple (128, 0, 128)
+    points = [None] * len(BODY_PARTS)
+    for i in range(0, len(keypoints), 3):
+        x, y, confidence = keypoints[i], keypoints[i + 1], keypoints[i + 2]
+        if confidence > 0.1:
+            points[i // 3] = (int(x), int(y))
+            cv2.circle(frame, (int(x), int(y)), 3, color, thickness=-1)
+
+    for pair in pairs:
+        partA = BODY_PARTS[pair[0]]
+        partB = BODY_PARTS[pair[1]]
+        if points[partA] and points[partB]:
+            cv2.line(frame, points[partA], points[partB], color, 2)
+
+frame_idx = 0
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    json_filename = os.path.join(input_folder, f"Purple_sample_{str(frame_idx).zfill(12)}_keypoints.json")
+    if os.path.exists(json_filename):
+        with open(json_filename, 'r') as f:
+            data = json.load(f)
+            for person in data['people']:
+                keypoints = person['pose_keypoints_2d']
+                draw_keypoints_and_lines(frame, keypoints, POSE_PAIRS)
+
+    out.write(frame)
+    frame_idx += 1
+
+cap.release()
+out.release()
+print("Re-rendering complete.")
+
+
+
+
+2) COCO
+!cd $OPENPOSE_PATH && ./build/examples/openpose/openpose.bin --video ../images/YOUR_VIDEO.mp4 --write_json ../output_jsons/ --model_pose COCO -hand -face  --write_video ../images/YOUR_VIDEO_OUTPUT_coco.mp4 --display 0 --render_pose 1
+
+#VISUALIZATION
+
+import json
+
+input_folder = "/content/output_jsons2"
+output_folder = "/content/filtered_output_jsons/"
+
+# Create the output folder if it doesn't exist
+if not os.path.exists(output_folder):
+    os.makedirs(output_folder)
+
+# Indices for keypoints excluding knees (9, 12) and ankles (10, 13)
+keypoints_to_keep = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 14, 15, 16, 17
+]
+
+for filename in os.listdir(input_folder):
+    if filename.endswith(".json"):
+        input_filepath = os.path.join(input_folder, filename)
+        output_filepath = os.path.join(output_folder, filename)
+
+        with open(input_filepath, 'r') as f:
+            data = json.load(f)
+
+        for person in data['people']:
+            keypoints = person['pose_keypoints_2d']
+            filtered_keypoints = []
+            for i in keypoints_to_keep:
+                filtered_keypoints.extend(keypoints[i*3:(i+1)*3])
+            person['pose_keypoints_2d'] = filtered_keypoints
+
+        with open(output_filepath, 'w') as f:
+            json.dump(data, f, indent=4)
+
+print("Keypoints filtering complete. Check the output JSON files in the filtered_output_jsons folder.")
+
+
+# Adjusting visualization on coco
+
+import cv2
+import os
+import json
+
+# Paths
+input_folder = "/content/filtered_output_jsons"
+video_path = "/content/images/YOUR_VIDEO.mp4"
+output_video_path = "/content/images/YOUR_VIDEO_OUTPUT_coco.mp4"
+
+# BODY_PARTS mapping based on the filtered keypoints (excluding knees and ankles) - Modify this part if you have different intention than the current one
+BODY_PARTS = {
+    "Nose": 0, "Neck": 1, "RShoulder": 2, "RElbow": 3, "RWrist": 4,
+    "LShoulder": 5, "LElbow": 6, "LWrist": 7, "RHip": 8, "LHip": 11,
+    "REye": 14, "LEye": 15, "REar": 16, "LEar": 17
+}
+
+# Pose pairs for drawing lines between keypoints - define the lines connecting the landmark
+POSE_PAIRS = [
+    ["Nose", "LEye"], ["LEye", "LEar"], ["Nose", "REye"], ["REye", "REar"],
+    ["Neck", "RShoulder"], ["RShoulder", "RElbow"], ["RElbow", "RWrist"],
+    ["Neck", "LShoulder"], ["LShoulder", "LElbow"], ["LElbow", "LWrist"],
+    ["Neck", "RHip"], ["Neck", "LHip"],
+]
+
+# Open the original video
+cap = cv2.VideoCapture(video_path)
+if not cap.isOpened():
+    print("Error: Could not open video.")
+    exit()
+
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter(output_video_path, fourcc, int(cap.get(cv2.CAP_PROP_FPS)), (int(cap.get(3)), int(cap.get(4))))
+
+# Function to draw keypoints and lines connecting them
+def draw_keypoints_and_lines(frame, keypoints, pairs, color=(255, 0, 0)):  # (128, 0, 128) Purple color - Use this line for changing the color
+    points = [None] * len(BODY_PARTS)
+    for i in range(0, len(keypoints), 3):
+        if i + 2 < len(keypoints):  # Check if the index is within the range
+            x, y, confidence = keypoints[i], keypoints[i + 1], keypoints[i + 2]
+            if confidence > 0.1:
+                points[i // 3] = (int(x), int(y))
+                cv2.circle(frame, (int(x), int(y)), 3, color, thickness=-1)
+
+    for pair in pairs:
+        partA = BODY_PARTS[pair[0]]
+        partB = BODY_PARTS[pair[1]]
+        if partA < len(points) and partB < len(points) and points[partA] and points[partB]:
+            cv2.line(frame, points[partA], points[partB], color, 2)
+
+frame_idx = 0
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    json_filename = os.path.join(input_folder, f"YOUR_VIDEO{str(frame_idx).zfill(12)}_keypoints.json")
+    if os.path.exists(json_filename):
+        with open(json_filename, 'r') as f:
+            data = json.load(f)
+            for person in data['people']:
+                keypoints = person['pose_keypoints_2d']
+                draw_keypoints_and_lines(frame, keypoints, POSE_PAIRS)
+    out.write(frame)
+    frame_idx += 1
+
+cap.release()
+out.release()
+print("Re-rendering complete.")
+
+
+If you have problems in installing BODY_25 install these caffemodel manually:
+
